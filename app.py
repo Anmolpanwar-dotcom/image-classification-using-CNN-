@@ -15,13 +15,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 @st.cache_resource
 def load_my_model():
-    import os
     os.environ['TF_USE_LEGACY_KERAS'] = '1'
     model_path = hf_hub_download(
         repo_id="CodeWithAnmol/pet-classifier",
         filename="pet_model.h5"
     )
-    return tf.keras.models.load_model(model_path, compile=False)
+    import keras
+    return keras.models.load_model(model_path, compile=False)
+    
 st.title("🐾 Cat vs Dog Classifier")
 st.write("Upload an image, and our AI will tell you if it's a Cat or a Dog!")
 with st.sidebar:
