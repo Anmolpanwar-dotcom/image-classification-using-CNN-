@@ -2,6 +2,8 @@ import streamlit as st
 import tensorflow as tf
 from PIL import Image
 import numpy as np
+import os
+from huggingface_hub import hf_hub_download
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -10,7 +12,6 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- CSS ---
 st.markdown("""
     <style>
     .main { background-color: #f0f2f6; }
@@ -35,9 +36,11 @@ st.markdown("""
 # --- Model Loading ---
 @st.cache_resource
 def load_my_model():
-    interpreter = tf.lite.Interpreter(model_path="pet_model.tflite")
-    interpreter.allocate_tensors()
-    return interpreter
+    model_path = hf_hub_download(
+        repo_id="CodeWithAnmol/pet-classifier",
+        filename="pet_model.h5"
+    )
+    return tf.keras.models.load_model(model_path)
 
 model = load_my_model()
 
@@ -67,20 +70,12 @@ if uploaded_file is not None:
         st.write("### Analysis")
         if st.button("Predict"):
             with st.spinner('AI is thinking...'):
-                # Preprocessing
                 img = image.resize((150, 150))
-                img_array = np.array(img, dtype=np.float32)
+                img_array = tf.keras.utils.img_to_array(img)
                 img_array = img_array / 255.0
                 img_array = np.expand_dims(img_array, axis=0)
 
-                # TFLite Prediction
-                input_details  = model.get_input_details()
-                output_details = model.get_output_details()
-
-                model.set_tensor(input_details[0]['index'], img_array)
-                model.invoke()
-
-                prediction = model.get_tensor(output_details[0]['index'])[0][0]
+                prediction = model.predict(img_array, verbose=0)[0][0]
 
                 st.markdown('<div class="prediction-box">', unsafe_allow_html=True)
                 if prediction > 0.5:
