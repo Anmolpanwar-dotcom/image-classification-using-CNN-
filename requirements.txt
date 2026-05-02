@@ -4,3 +4,4 @@ keras==2.15.0
 numpy==1.26.4
 pillow
 huggingface-hub
+h5py==3.11.0
