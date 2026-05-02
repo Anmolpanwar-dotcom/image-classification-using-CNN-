@@ -1,55 +1,35 @@
 import streamlit as st
-import tensorflow as tf
-from PIL import Image
 import numpy as np
 import os
+from PIL import Image
 from huggingface_hub import hf_hub_download
+import tensorflow as tf
 
-# --- Page Configuration ---
-st.set_page_config(
-    page_title="Pet Classifier AI",
-    page_icon="🐾",
-    layout="centered"
-)
+st.set_page_config(page_title="Pet Classifier AI", page_icon="🐾", layout="centered")
 
 st.markdown("""
     <style>
-    .main { background-color: #f0f2f6; }
     .stButton>button {
-        width: 100%;
-        border-radius: 20px;
-        height: 3em;
-        background-color: #FF4B4B;
-        color: white;
-        font-weight: bold;
-    }
-    .prediction-box {
-        padding: 20px;
-        border-radius: 15px;
-        text-align: center;
-        background-color: white;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        width: 100%; border-radius: 20px; height: 3em;
+        background-color: #FF4B4B; color: white; font-weight: bold;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# --- Model Loading ---
 @st.cache_resource
 def load_my_model():
-    import os
-    os.environ['TF_KERAS'] = '1'
     model_path = hf_hub_download(
         repo_id="CodeWithAnmol/pet-classifier",
         filename="pet_model.h5"
     )
-    import tensorflow as tf
-    model = tf.keras.models.load_model(model_path, compile=False)
-    return model
-# --- Header ---
+    return tf.keras.models.load_model(model_path, compile=False)
+
+# Global model
+model = load_my_model()
+
 st.title("🐾 Cat vs Dog Classifier")
 st.write("Upload an image, and our AI will tell you if it's a Cat or a Dog!")
 
-# --- Sidebar ---
 with st.sidebar:
     st.header("About Project")
     st.info("BCA Graduate (2022-2025) Portfolio Project. Built using CNN and TensorFlow.")
@@ -57,7 +37,6 @@ with st.sidebar:
     st.markdown("### Tech Stack:")
     st.code("Python\nTensorFlow\nStreamlit\nCNN Architecture")
 
-# --- Main Interface ---
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
@@ -75,10 +54,10 @@ if uploaded_file is not None:
                 img_array = tf.keras.utils.img_to_array(img)
                 img_array = img_array / 255.0
                 img_array = np.expand_dims(img_array, axis=0)
-
+                
                 prediction = model.predict(img_array, verbose=0)[0][0]
 
-                st.markdown('<div class="prediction-box">', unsafe_allow_html=True)
+                st.markdown('<div style="padding:20px;border-radius:15px;text-align:center;background:white;box-shadow:0 4px 6px rgba(0,0,0,0.1)">', unsafe_allow_html=True)
                 if prediction > 0.5:
                     st.subheader("It's a DOG! 🐶")
                     st.write(f"Confidence: {prediction*100:.2f}%")
