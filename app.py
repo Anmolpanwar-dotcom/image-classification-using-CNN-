@@ -36,14 +36,15 @@ st.markdown("""
 # --- Model Loading ---
 @st.cache_resource
 def load_my_model():
+    import os
+    os.environ['TF_KERAS'] = '1'
     model_path = hf_hub_download(
         repo_id="CodeWithAnmol/pet-classifier",
         filename="pet_model.h5"
     )
-    return tf.keras.models.load_model(model_path)
-
-model = load_my_model()
-
+    import tensorflow as tf
+    model = tf.keras.models.load_model(model_path, compile=False)
+    return model
 # --- Header ---
 st.title("🐾 Cat vs Dog Classifier")
 st.write("Upload an image, and our AI will tell you if it's a Cat or a Dog!")
