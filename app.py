@@ -26,8 +26,28 @@ st.markdown(
 )
 
 
-def _patch_h5_input_layer_config(model_path: str) -> str:
-    """Make Keras 3 H5 InputLayer configs loadable in TensorFlow/Keras 2.15."""
+def _make_keras3_config_tf215_compatible(value):
+    if isinstance(value, dict):
+        if value.get("class_name") == "DTypePolicy":
+            return value.get("config", {}).get("name", "float32")
+
+        patched = {
+            key: _make_keras3_config_tf215_compatible(item)
+            for key, item in value.items()
+        }
+
+        if "batch_shape" in patched and "batch_input_shape" not in patched:
+            patched["batch_input_shape"] = patched.pop("batch_shape")
+
+        return patched
+
+    if isinstance(value, list):
+        return [_make_keras3_config_tf215_compatible(item) for item in value]
+
+    return value
+
+
+def _patch_h5_model_config(model_path: str) -> str:
     import h5py
 
     patched_path = os.path.join(tempfile.gettempdir(), "pet_model_tf215_compatible.h5")
@@ -41,14 +61,7 @@ def _patch_h5_input_layer_config(model_path: str) -> str:
         if isinstance(raw_config, bytes):
             raw_config = raw_config.decode("utf-8")
 
-        model_config = json.loads(raw_config)
-
-        for layer in model_config.get("config", {}).get("layers", []):
-            if layer.get("class_name") == "InputLayer":
-                config = layer.get("config", {})
-                if "batch_shape" in config and "batch_input_shape" not in config:
-                    config["batch_input_shape"] = config.pop("batch_shape")
-
+        model_config = _make_keras3_config_tf215_compatible(json.loads(raw_config))
         h5_file.attrs["model_config"] = json.dumps(model_config)
 
     return patched_path
@@ -61,14 +74,8 @@ def load_my_model():
         filename="pet_model.h5",
     )
 
-    try:
-        return tf.keras.models.load_model(model_path, compile=False)
-    except TypeError as error:
-        if "batch_shape" not in str(error):
-            raise
-
-        patched_model_path = _patch_h5_input_layer_config(model_path)
-        return tf.keras.models.load_model(patched_model_path, compile=False)
+    patched_model_path = _patch_h5_model_config(model_path)
+    return tf.keras.models.load_model(patched_model_path, compile=False)
 
 
 st.title("🐾 Cat vs Dog Classifier")
@@ -99,7 +106,6 @@ if uploaded_file is not None:
 
                     img = image.resize((150, 150))
                     img_array = tf.keras.preprocessing.image.img_to_array(img)
-                    img_array = img_array / 255.0
                     img_array = np.expand_dims(img_array, axis=0)
 
                     prediction = model.predict(img_array, verbose=0)[0][0]
@@ -108,13 +114,16 @@ if uploaded_file is not None:
                         '<div style="padding:20px;border-radius:15px;text-align:center;background:white;box-shadow:0 4px 6px rgba(0,0,0,0.1); color: black;">',
                         unsafe_allow_html=True,
                     )
+
                     if prediction > 0.5:
                         st.subheader("It's a DOG! 🐶")
                         st.write(f"Confidence: {float(prediction) * 100:.2f}%")
                     else:
                         st.subheader("It's a CAT! 🐱")
                         st.write(f"Confidence: {float(1 - prediction) * 100:.2f}%")
+
                     st.markdown("</div>", unsafe_allow_html=True)
+
                 except Exception as e:
                     st.error(f"Prediction mein error aaya: {e}")
 else:
