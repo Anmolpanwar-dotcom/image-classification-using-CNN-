@@ -11,17 +11,24 @@ from PIL import Image
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
+IMAGE_SIZE = (150, 150)
+CLASS_NAMES = ("Cat", "Dog")
+
 st.set_page_config(page_title="Pet Classifier AI", page_icon="🐾", layout="centered")
 
 st.markdown(
     """
     <style>
     .stButton>button {
-        width: 100%; border-radius: 20px; height: 3em;
-        background-color: #FF4B4B; color: white; font-weight: bold;
+        width: 100%;
+        border-radius: 20px;
+        height: 3em;
+        background-color: #FF4B4B;
+        color: white;
+        font-weight: bold;
     }
     </style>
-""",
+    """,
     unsafe_allow_html=True,
 )
 
@@ -67,6 +74,10 @@ def _patch_h5_model_config(model_path: str) -> str:
     return patched_path
 
 
+def _model_has_rescaling_layer(model) -> bool:
+    return any(layer.__class__.__name__ == "Rescaling" for layer in model.layers)
+
+
 @st.cache_resource
 def load_my_model():
     model_path = hf_hub_download(
@@ -75,11 +86,35 @@ def load_my_model():
     )
 
     patched_model_path = _patch_h5_model_config(model_path)
-    return tf.keras.models.load_model(patched_model_path, compile=False)
+    model = tf.keras.models.load_model(patched_model_path, compile=False)
+    return model, _model_has_rescaling_layer(model)
+
+
+def prepare_image(image: Image.Image, model_has_rescaling: bool) -> np.ndarray:
+    image = image.convert("RGB").resize(IMAGE_SIZE)
+    img_array = tf.keras.preprocessing.image.img_to_array(image)
+
+    # Training model mein Rescaling layer hai to raw 0-255 pixels bhejne chahiye.
+    # Agar kisi purane model mein Rescaling nahi hai, tab app yahan normalize karega.
+    if not model_has_rescaling:
+        img_array = img_array / 255.0
+
+    return np.expand_dims(img_array, axis=0)
+
+
+def predict_pet(image: Image.Image):
+    model, model_has_rescaling = load_my_model()
+    img_array = prepare_image(image, model_has_rescaling)
+    dog_probability = float(model.predict(img_array, verbose=0)[0][0])
+
+    if dog_probability >= 0.5:
+        return "Dog", dog_probability
+
+    return "Cat", 1.0 - dog_probability
 
 
 st.title("🐾 Cat vs Dog Classifier")
-st.write("Upload an image, and our AI will tell you if it's a Cat or a Dog!")
+st.write("Upload an image, and AI will tell you if it's a Cat or a Dog.")
 
 with st.sidebar:
     st.header("About Project")
@@ -102,26 +137,23 @@ if uploaded_file is not None:
         if st.button("Predict"):
             with st.spinner("AI is thinking..."):
                 try:
-                    model = load_my_model()
-
-                    img = image.resize((150, 150))
-                    img_array = tf.keras.preprocessing.image.img_to_array(img)
-                    img_array = np.expand_dims(img_array, axis=0)
-
-                    prediction = model.predict(img_array, verbose=0)[0][0]
+                    label, confidence = predict_pet(image)
 
                     st.markdown(
-                        '<div style="padding:20px;border-radius:15px;text-align:center;background:white;box-shadow:0 4px 6px rgba(0,0,0,0.1); color: black;">',
+                        """
+                        <div style="padding:20px;border-radius:15px;text-align:center;
+                        background:white;box-shadow:0 4px 6px rgba(0,0,0,0.1);
+                        color:black;">
+                        """,
                         unsafe_allow_html=True,
                     )
 
-                    if prediction > 0.5:
+                    if label == "Dog":
                         st.subheader("It's a DOG! 🐶")
-                        st.write(f"Confidence: {float(prediction) * 100:.2f}%")
                     else:
                         st.subheader("It's a CAT! 🐱")
-                        st.write(f"Confidence: {float(1 - prediction) * 100:.2f}%")
 
+                    st.write(f"Confidence: {confidence * 100:.2f}%")
                     st.markdown("</div>", unsafe_allow_html=True)
 
                 except Exception as e:
